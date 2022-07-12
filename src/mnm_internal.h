@@ -13,6 +13,15 @@ namespace mnm
 {
 
 // -----------------------------------------------------------------------------
+// RESOURCE LIMITS
+// -----------------------------------------------------------------------------
+
+// TODO : Ideally these are overridable by user via preprocessor directives. 
+
+constexpr uint32_t MAX_MESHES            = 4096;
+
+
+// -----------------------------------------------------------------------------
 // MEMORY ALLOCATION
 // -----------------------------------------------------------------------------
 
@@ -106,12 +115,13 @@ struct MeshDesc
     uint32_t                  flags;
 };
 
-struct Mesh
+union Mesh
 {
-    uint16_t flags;
-    uint16_t element_count;
-    uint16_t vertex_buffer;
-    uint16_t index_buffer;
+    bgfx::TransientVertexBuffer* transient_vertex_buffer;
+    bgfx::VertexBufferHandle     static_vertex_buffer;
+    bgfx::VertexBufferHandle     static_index_buffer;
+    uint16_t                     element_count;
+    uint16_t                     annotation;
 
     MeshType type() const;
 
@@ -120,6 +130,19 @@ struct Mesh
     void create(const MeshDesc& desc, ArenaAllocator& allocator);
 
     void destroy();
+};
+
+struct MeshCache
+{
+    std::array<Mesh, MAX_MESHES> meshes;
+
+    void init();
+
+    void cleanup();
+
+    void add_mesh(const Mesh& mesh);
+
+    void invalidate_transient_meshes();
 };
 
 

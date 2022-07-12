@@ -122,6 +122,12 @@ std::span<uint8_t> PoolAllocator::allocate(uint32_t count)
     return {};
 }
 
+template <typename T>
+void allocate(T*& ptr, ArenaAllocator& allocator)
+{
+    ptr = reinterpret_cast<T*>(allocator.allocate(sizeof(T), alignof(T)).data());
+}
+
 
 // -----------------------------------------------------------------------------
 // VERTEX LAYOUTS
@@ -245,7 +251,6 @@ void VertexRecorder::push_current_vertex()
             );
 
             std::span<uint8_t> blob = allocator.allocate(2);
-
             ASSERT(
                 !blob.empty(),
                 "Vertex recorder full."
@@ -281,7 +286,62 @@ std::span<const uint8_t> VertexRecorder::buffer() const
 // MESH
 // -----------------------------------------------------------------------------
 
-// ...
+MeshType Mesh::type() const
+{
+    return MeshType(transient_vertex_buffer != nullptr);
+}
+
+bool Mesh::is_valid() const
+{
+    return element_count > 0;
+}
+
+void Mesh::create(const MeshDesc& desc, ArenaAllocator& allocator)
+{
+    *this = {};
+
+    const uint32_t vertex_count = desc.buffer.size() / desc.layout->getStride();
+
+    if (desc.flags & MESH_TRANSIENT)
+    {
+        bgfx::TransientVertexBuffer* buffer;
+        allocate(buffer, allocator);
+        ASSERT(
+            buffer != nullptr,
+            "Failed to allocate transient buffer structure."
+        );
+
+        bgfx::allocTransientVertexBuffer(buffer, vertex_count, *desc.layout);
+        const uint32_t allocated_vertex_count = buffer->size / buffer->stride;
+        WARN(
+            allocated_vertex_count == vertex_count,
+            "Failed to allocate enough transient vertices."
+        );
+
+        if (allocated_vertex_count == vertex_count)
+        {
+            memcpy(buffer->data, desc.buffer.data(), buffer->size);
+
+            transient_vertex_buffer = buffer;
+            element_count = allocated_vertex_count;
+        }
+
+        return;
+    }
+
+    // TODO : Create static vertex + index buffers.
+}
+
+void Mesh::destroy()
+{
+    if (element_count && !transient_vertex_buffer)
+    {
+        bgfx::destroy(static_vertex_buffer);
+        bgfx::destroy(static_index_buffer );
+    }
+
+    *this = {};
+}
 
 
 // -----------------------------------------------------------------------------
