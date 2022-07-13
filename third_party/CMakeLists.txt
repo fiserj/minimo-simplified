@@ -18,10 +18,18 @@ FetchContent_Declare(
     GIT_TAG        ad018d47c6c107e2fe2f3ba0716f9e728ed59a39
 )
 
+FetchContent_Declare(
+    meshoptimizer
+    GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
+    GIT_TAG        v0.17
+)
+
 FetchContent_Populate(bgfx)
 FetchContent_Populate(bimg)
 FetchContent_Populate(bx)
+FetchContent_Populate(meshoptimizer)
 
 include(cmake/bgfx.cmake)
 include(cmake/bimg.cmake)
 include(cmake/bx.cmake)
+include(cmake/meshoptimizer.cmake)

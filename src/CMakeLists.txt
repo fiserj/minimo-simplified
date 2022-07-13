@@ -14,6 +14,7 @@ target_link_libraries(${NAME}
         bgfx
     PRIVATE
         bx
+        meshoptimizer
 )
 
 if(MSVC)
