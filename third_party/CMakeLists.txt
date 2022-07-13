@@ -19,6 +19,12 @@ FetchContent_Declare(
 )
 
 FetchContent_Declare(
+    HandmadeMath
+    GIT_REPOSITORY https://github.com/HandmadeMath/Handmade-Math.git
+    GIT_TAG        v1.13.0
+)
+
+FetchContent_Declare(
     meshoptimizer
     GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
     GIT_TAG        v0.17
@@ -27,9 +33,11 @@ FetchContent_Declare(
 FetchContent_Populate(bgfx)
 FetchContent_Populate(bimg)
 FetchContent_Populate(bx)
+FetchContent_Populate(HandmadeMath)
 FetchContent_Populate(meshoptimizer)
 
 include(cmake/bgfx.cmake)
 include(cmake/bimg.cmake)
 include(cmake/bx.cmake)
+include(cmake/HandmadeMath.cmake)
 include(cmake/meshoptimizer.cmake)
