@@ -1,13 +1,15 @@
 #pragma once
 
+namespace mnm
+{
+
 #ifndef BGFX_EMBEDDED_SHADER_H_HEADER_GUARD
-#   error Please include '<bgfx/embedded_shader.h>' before including the shader '${SHADER_NAME}'.
+#   error Include '<bgfx/embedded_shader.h>' before including '${SHADER_NAME}'.
 #endif
 
-#include <stdint.h> // uint*_t
-
-// Taken from <bgfx/embedded_shader.h>.
-#define EMPTY_SHADER { 'V', 'S', 'H', 5, 0, 0, 0, 0, 0, 0 }
+#ifndef EMPTY_SHADER
+#   define EMPTY_SHADER { 'V', 'S', 'H', 5, 0, 0, 0, 0, 0, 0 }
+#endif
 
 // DX9.
 #if __has_include("dx9/${SHADER_NAME}_dx9.h")
@@ -55,4 +57,4 @@ extern const uint32_t   ${SHADER_NAME}_pssl_size;
 static const uint8_t ${SHADER_NAME}_spv[10] = EMPTY_SHADER;
 #endif
 
-#undef EMPTY_SHADER
+} // namespace mnm

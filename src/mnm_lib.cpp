@@ -4,7 +4,7 @@
 #include <stddef.h>               // max_align_t, size_t
 #include <string.h>               // memcpy
 
-#include <bgfx/embedded_shader.h> // BGFX_EMBEDDED_SHADER*
+#include <bgfx/embedded_shader.h> // BGFX_EMBEDDED_SHADER
 
 #include <bx/allocator.h>         // alignPtr
 #include <bx/bx.h>                // BX_ASSERT, BX_WARN, isPowerOf2
@@ -12,6 +12,8 @@
 #include <meshoptimizer.h>        // meshopt_*
 
 #include <mnm.h>
+
+#include "mnm_shaders.h"          // *_fs, *_vs
 
 namespace mnm
 {
@@ -485,7 +487,7 @@ struct DefaultProgramDesc
     const char* fs_name = nullptr;
 };
 
-static const DefaultProgramDesc s_default_programs_descs[] =
+static const DefaultProgramDesc s_default_program_descs[] =
 {
     {
         0, // NOTE : Position only. It's assumed everywhere else.
@@ -513,7 +515,26 @@ static const DefaultProgramDesc s_default_programs_descs[] =
     },
 };
 
-// TODO : Add default embedded shaders.
+static const bgfx::EmbeddedShader s_default_shaders[] =
+{
+    BGFX_EMBEDDED_SHADER(position_fs),
+    BGFX_EMBEDDED_SHADER(position_vs),
+
+    BGFX_EMBEDDED_SHADER(position_color_fs),
+    BGFX_EMBEDDED_SHADER(position_color_vs),
+
+    BGFX_EMBEDDED_SHADER(position_color_normal_fs),
+    BGFX_EMBEDDED_SHADER(position_color_normal_vs),
+
+    BGFX_EMBEDDED_SHADER(position_color_texcoord_fs),
+    BGFX_EMBEDDED_SHADER(position_color_texcoord_vs),
+
+    BGFX_EMBEDDED_SHADER(position_normal_fs),
+    BGFX_EMBEDDED_SHADER(position_normal_vs),
+
+    BGFX_EMBEDDED_SHADER(position_texcoord_fs),
+    BGFX_EMBEDDED_SHADER(position_texcoord_vs),
+};
 
 bgfx::ProgramHandle DefaultProgramCache::operator[](uint32_t flags) const
 {
@@ -541,7 +562,7 @@ void DefaultProgramCache::init(bgfx::RendererType::Enum renderer)
     char vs_name[32];
     char fs_name[32];
 
-    for (const DefaultProgramDesc& desc : s_default_programs_descs)
+    for (const DefaultProgramDesc& desc : s_default_program_descs)
     {
         strcpy(vs_name, desc.vs_name);
         strcat(vs_name, "_vs");
@@ -549,14 +570,14 @@ void DefaultProgramCache::init(bgfx::RendererType::Enum renderer)
         strcpy(fs_name, desc.fs_name ? desc.fs_name : desc.vs_name);
         strcat(fs_name, "_fs");
 
-        const bgfx::ShaderHandle vertex = {}; // bgfx::createEmbeddedShader(s_default_shaders, renderer, vs_name);
+        const bgfx::ShaderHandle vertex = bgfx::createEmbeddedShader(s_default_shaders, renderer, vs_name);
         REQUIRE(
             bgfx::isValid(vertex),
             "Invalid default vertex shader '%s'.",
             vs_name
         );
 
-        const bgfx::ShaderHandle fragment = {}; // bgfx::createEmbeddedShader(s_default_shaders, renderer, fs_name);
+        const bgfx::ShaderHandle fragment = bgfx::createEmbeddedShader(s_default_shaders, renderer, fs_name);
         REQUIRE(
             bgfx::isValid(fragment),
             "Invalid default fragment shader '%s'.",
