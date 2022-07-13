@@ -1,11 +1,13 @@
 #include "mnm_internal.h"
 
-#include <inttypes.h>     // PRI*
-#include <stddef.h>       // max_align_t, size_t
-#include <string.h>       // memcpy
+#include <inttypes.h>      // PRI*
+#include <stddef.h>        // max_align_t, size_t
+#include <string.h>        // memcpy
 
-#include <bx/allocator.h> // alignPtr
-#include <bx/bx.h>        // BX_ASSERT, BX_WARN, isPowerOf2
+#include <bx/allocator.h>  // alignPtr
+#include <bx/bx.h>         // BX_ASSERT, BX_WARN, isPowerOf2
+
+#include <meshoptimizer.h> // meshopt_*
 
 #include <mnm.h>
 
@@ -16,9 +18,10 @@ namespace mnm
 // ASSERTIONS
 // -----------------------------------------------------------------------------
 
-#define ASSERT BX_ASSERT
-#define TRACE  BX_TRACE
-#define WARN   BX_WARN
+#define ASSERT  BX_ASSERT
+#define REQUIRE ASSERT // TODO : Make sure this is enabled in all builds.
+#define TRACE   BX_TRACE
+#define WARN    BX_WARN
 
 
 // -----------------------------------------------------------------------------
@@ -123,9 +126,19 @@ std::span<uint8_t> PoolAllocator::allocate(uint32_t count)
 }
 
 template <typename T>
-void allocate(T*& ptr, ArenaAllocator& allocator)
+void allocate(T*& ptr, ArenaAllocator& allocator, uint32_t count = 1)
 {
-    ptr = reinterpret_cast<T*>(allocator.allocate(sizeof(T), alignof(T)).data());
+    ptr = reinterpret_cast<T*>(allocator.allocate(sizeof(T) * count, alignof(T)).data());
+}
+
+static void free_bgfx_memory(void*, void*)
+{
+    // NOTE : We do nothing, since the memory was allocated from an arena.
+}
+
+static const bgfx::Memory* allocacte_bgfx_memory(ArenaAllocator& allocator, uint32_t size)
+{
+    return bgfx::makeRef(allocator.allocate(size).data(), size, free_bgfx_memory);
 }
 
 
@@ -286,6 +299,10 @@ std::span<const uint8_t> VertexRecorder::buffer() const
 // MESH
 // -----------------------------------------------------------------------------
 
+static constexpr uint32_t PRIMITIVE_TYPE_MASK = PRIMITIVE_TRIANGLES |
+                                                PRIMITIVE_QUADS     |
+                                                PRIMITIVE_LINES     ;
+
 MeshType Mesh::type() const
 {
     return MeshType(transient_vertex_buffer != nullptr);
@@ -300,13 +317,19 @@ void Mesh::create(const MeshDesc& desc, ArenaAllocator& allocator)
 {
     *this = {};
 
-    const uint32_t vertex_count = desc.buffer.size() / desc.layout->getStride();
+    const uint32_t vertex_size  = desc.layout->getStride();
+    const uint32_t vertex_count = desc.buffer.size() / vertex_size;
+    REQUIRE(
+        vertex_count < UINT16_MAX,
+        "Too many vertices (%" PRIu32 ").",
+        vertex_count
+    );
 
     if (desc.flags & MESH_TRANSIENT)
     {
         bgfx::TransientVertexBuffer* buffer;
         allocate(buffer, allocator);
-        ASSERT(
+        REQUIRE(
             buffer != nullptr,
             "Failed to allocate transient buffer structure."
         );
@@ -329,7 +352,54 @@ void Mesh::create(const MeshDesc& desc, ArenaAllocator& allocator)
         return;
     }
 
-    // TODO : Create static vertex + index buffers.
+    const uint32_t index_count = vertex_count;
+
+    uint32_t* remap_table = nullptr;
+    allocate(remap_table, allocator, index_count);
+    REQUIRE(
+        remap_table != nullptr,
+        "Failed to allocate vertex remap table."
+    );
+
+    const uint32_t indexed_vertex_count = uint32_t(meshopt_generateVertexRemap(
+        remap_table,
+        nullptr,
+        index_count,
+        desc.buffer.data(),
+        index_count,
+        vertex_size
+    ));
+
+    const bgfx::Memory* indices = allocacte_bgfx_memory(allocator, indexed_vertex_count * vertex_size);
+    REQUIRE(
+        indices && indices->data,
+        "Failed to allocate remapped index buffer memory."
+    );
+
+    const bgfx::Memory* vertices = allocacte_bgfx_memory(allocator, indexed_vertex_count * vertex_size);
+    REQUIRE(
+        vertices && vertices->data,
+        "Failed to allocate remapped vertex buffer memory."
+    );
+
+    uint32_t* indices_u32 = reinterpret_cast<uint32_t*>(indices->data);
+
+    meshopt_remapIndexBuffer(indices_u32, nullptr, index_count, remap_table);
+
+    meshopt_remapVertexBuffer(vertices->data, desc.buffer.data(), indexed_vertex_count, vertex_size, remap_table);
+
+    const bool optimize_geometry =
+         (desc.flags & OPTIMIZE_GEOMETRY  ) &&
+        ((desc.flags & PRIMITIVE_TYPE_MASK) != PRIMITIVE_LINES);
+
+    if (optimize_geometry)
+    {
+        meshopt_optimizeVertexCache(indices_u32, indices_u32, index_count, indexed_vertex_count);
+
+        meshopt_optimizeOverdraw(indices_u32, indices_u32, index_count, reinterpret_cast<float*>(vertices->data), indexed_vertex_count, vertex_size, 1.05f);
+
+        meshopt_optimizeVertexFetch(vertices->data, indices_u32, index_count, vertices->data, indexed_vertex_count, vertex_size);
+    }
 }
 
 void Mesh::destroy()
@@ -379,7 +449,7 @@ void ThreadLocalContext::swap_frame_allocator_memory()
 
 void GlobalContext::init()
 {
-    vertex_layouts.init();
+    vertex_layout_cache.init();
 }
 
 void GlobalContext::cleanup()

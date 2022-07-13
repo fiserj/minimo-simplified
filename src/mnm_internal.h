@@ -169,7 +169,8 @@ struct ThreadLocalContext
 
 struct GlobalContext
 {
-    VertexLayoutCache vertex_layouts;
+    MeshCache         mesh_cache;
+    VertexLayoutCache vertex_layout_cache;
 
     void init();
 
