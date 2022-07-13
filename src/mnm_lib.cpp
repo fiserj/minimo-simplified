@@ -610,6 +610,32 @@ void DefaultProgramCache::cleanup()
 
 
 // -----------------------------------------------------------------------------
+// MATRIX STACK
+// -----------------------------------------------------------------------------
+
+void MatrixStack::init()
+{
+    top  = HMM_Mat4d(1.0f);
+    size = 0;
+}
+
+void MatrixStack::push()
+{
+    matrices[size++] = top;
+}
+
+void MatrixStack::pop()
+{
+    top = matrices[--size];
+}
+
+void MatrixStack::multiply_top(const hmm_mat4& matrix)
+{
+    top = matrix * top;
+}
+
+
+// -----------------------------------------------------------------------------
 // THREAD-LOCAL CONTEXT
 // -----------------------------------------------------------------------------
 
@@ -618,6 +644,7 @@ void ThreadLocalContext::init(uint32_t frame_memory)
     std::vector<uint8_t>(2u * frame_memory).swap(double_frame_memory);
 
     frame_allocator.init({ double_frame_memory.data(), frame_memory });
+    matrix_stack   .init();
 }
 
 void ThreadLocalContext::cleanup()

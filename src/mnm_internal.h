@@ -1,13 +1,14 @@
 #pragma once
 
-#include <stdint.h>    // uint*_t
+#include <stdint.h>       // uint*_t
 
-#include <array>       // array
-#include <span>        // span
-#include <vector>      // vector
+#include <array>          // array
+#include <span>           // span
+#include <vector>         // vector
 
-#include <bgfx/bgfx.h> // bgfx::*
+#include <bgfx/bgfx.h>    // bgfx::*
 
+#include <HandmadeMath.h> // HMM_*, hmm_*
 
 namespace mnm
 {
@@ -18,7 +19,9 @@ namespace mnm
 
 // TODO : Ideally these are overridable by user via preprocessor directives. 
 
-constexpr uint32_t MAX_MESHES            = 4096;
+constexpr uint32_t MAX_MATRIX_STACK_DEPTH = 16;
+
+constexpr uint32_t MAX_MESHES             = 4096;
 
 
 // -----------------------------------------------------------------------------
@@ -163,6 +166,26 @@ struct DefaultProgramCache
 
 
 // -----------------------------------------------------------------------------
+// MATRIX STACK
+// -----------------------------------------------------------------------------
+
+struct MatrixStack
+{
+    hmm_mat4                                     top;
+    uint32_t                                     size;
+    std::array<hmm_mat4, MAX_MATRIX_STACK_DEPTH> matrices;
+
+    void init();
+
+    void push();
+
+    void pop();
+
+    void multiply_top(const hmm_mat4& matrix);
+};
+
+
+// -----------------------------------------------------------------------------
 // THREAD-LOCAL CONTEXT
 // -----------------------------------------------------------------------------
 
@@ -170,6 +193,7 @@ struct ThreadLocalContext
 {
     std::vector<uint8_t> double_frame_memory;
     ArenaAllocator       frame_allocator;
+    MatrixStack          matrix_stack;
 
     void init(uint32_t frame_memory);
 
