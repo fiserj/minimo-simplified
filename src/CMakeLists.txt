@@ -40,3 +40,5 @@ set_target_properties(${NAME} PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin$<$<CONFIG:Debug>:>" # The dummy generator expression
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin$<$<CONFIG:Debug>:>" # is to avoid having to list all
 )
+
+include(cmake/add_shader_dependency.cmake)
