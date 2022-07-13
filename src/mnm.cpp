@@ -438,6 +438,39 @@ void Mesh::destroy()
     *this = {};
 }
 
+void MeshCache::init()
+{
+    *this = {};
+}
+
+void MeshCache::cleanup()
+{
+    for (Mesh& mesh : meshes)
+    {
+        mesh.destroy();
+    }
+}
+
+void MeshCache::add_mesh(uint32_t id, const Mesh& mesh)
+{
+    // NOTE : Not thread safe because users shouldn't create mesh with the same
+    //        ID from multiple threads in the first place.
+
+    meshes[id].destroy();
+    meshes[id] = mesh;
+}
+
+void MeshCache::invalidate_transient_meshes()
+{
+    for (Mesh& mesh : meshes)
+    {
+        if (mesh.transient_vertex_buffer)
+        {
+            mesh = {};
+        }
+    }
+}
+
 
 // -----------------------------------------------------------------------------
 // THREAD-LOCAL CONTEXT
@@ -474,11 +507,14 @@ void ThreadLocalContext::swap_frame_allocator_memory()
 
 void GlobalContext::init()
 {
+    mesh_cache.init();
+
     vertex_layout_cache.init();
 }
 
 void GlobalContext::cleanup()
 {
+    mesh_cache.cleanup();
 }
 
 

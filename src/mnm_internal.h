@@ -140,7 +140,7 @@ struct MeshCache
 
     void cleanup();
 
-    void add_mesh(const Mesh& mesh);
+    void add_mesh(uint32_t id, const Mesh& mesh);
 
     void invalidate_transient_meshes();
 };
