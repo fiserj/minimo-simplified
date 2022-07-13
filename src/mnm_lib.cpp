@@ -636,6 +636,136 @@ void MatrixStack::multiply_top(const hmm_mat4& matrix)
 
 
 // -----------------------------------------------------------------------------
+// PASSES
+// -----------------------------------------------------------------------------
+
+void Pass::init()
+{
+    view_matrix     = HMM_Mat4d(1.0f);
+    proj_matrix     = HMM_Mat4d(1.0f);
+
+    viewport_x      = 0;
+    viewport_y      = 0;
+    viewport_width  = SIZE_EQUAL;
+    viewport_height = SIZE_EQUAL;
+
+    framebuffer     = BGFX_INVALID_HANDLE;
+
+    clear_flags     = BGFX_CLEAR_NONE;
+    clear_depth     = 1.0f;
+    clear_rgba      = 0x000000ff;
+    clear_stencil   = 0;
+
+    dirty_flags     = DIRTY_CLEAR;
+}
+
+void Pass::update(bgfx::ViewId id, bgfx::Encoder* encoder, bool backbuffer_size_changed)
+{
+    if (dirty_flags & DIRTY_TOUCH)
+    {
+        encoder->touch(id);
+    }
+
+    if (dirty_flags & DIRTY_CLEAR)
+    {
+        bgfx::setViewClear(id, clear_flags, clear_rgba, clear_depth, clear_stencil);
+    }
+
+    if (dirty_flags & DIRTY_TRANSFORM)
+    {
+        bgfx::setViewTransform(id, &view_matrix, &proj_matrix);
+    }
+
+    if ((dirty_flags & DIRTY_RECT) || (backbuffer_size_changed && viewport_width >= SIZE_EQUAL))
+    {
+        if (viewport_width >= SIZE_EQUAL)
+        {
+            bgfx::setViewRect(id, viewport_x, viewport_y, bgfx::BackbufferRatio::Enum(viewport_width - SIZE_EQUAL));
+        }
+        else
+        {
+            bgfx::setViewRect(id, viewport_x, viewport_y, viewport_width, viewport_height);
+        }
+    }
+
+    if ((dirty_flags & DIRTY_FRAMEBUFFER) || backbuffer_size_changed)
+    {
+        // Having `BGFX_INVALID_HANDLE` here is OK.
+        bgfx::setViewFrameBuffer(id, framebuffer);
+    }
+
+    dirty_flags = DIRTY_NONE;
+}
+
+void Pass::touch()
+{
+    dirty_flags |= DIRTY_TOUCH;
+}
+
+void Pass::set_view(const hmm_mat4& matrix)
+{
+    view_matrix  = matrix;
+    dirty_flags |= DIRTY_TRANSFORM;
+}
+
+void Pass::set_projection(const hmm_mat4& matrix)
+{
+    proj_matrix  = matrix;
+    dirty_flags |= DIRTY_TRANSFORM;
+}
+
+void Pass::set_framebuffer(bgfx::FrameBufferHandle framebuffer_)
+{
+    framebuffer  = framebuffer_;
+    dirty_flags |= DIRTY_FRAMEBUFFER;
+}
+
+void Pass::set_no_clear()
+{
+    clear_flags  = BGFX_CLEAR_NONE;
+    dirty_flags |= DIRTY_CLEAR;
+}
+
+void Pass::set_clear_depth(float depth)
+{
+    clear_flags |= BGFX_CLEAR_DEPTH;
+    clear_depth  = depth;
+    dirty_flags |= DIRTY_CLEAR;
+}
+
+void Pass::set_clear_color(uint32_t rgba)
+{
+    clear_flags |= BGFX_CLEAR_COLOR;
+    clear_rgba   = rgba;
+    dirty_flags |= DIRTY_CLEAR;
+}
+
+void Pass::set_viewport(uint16_t x, uint16_t y, uint16_t width, uint16_t height)
+{
+    ASSERT(
+        width < SIZE_EQUAL || width == height,
+        "Symbolic viewport size must be the same in bot X and Y axes."
+    );
+
+    viewport_x      = x;
+    viewport_y      = y;
+    viewport_width  = width;
+    viewport_height = height;
+    dirty_flags    |= DIRTY_RECT;
+}
+
+void PassCache::init()
+{
+    for (Pass& pass : passes)
+    {
+        pass.init();
+    }
+
+    backbuffer_size_changed = true;
+}
+
+
+// -----------------------------------------------------------------------------
 // THREAD-LOCAL CONTEXT
 // -----------------------------------------------------------------------------
 
@@ -672,6 +802,7 @@ void ThreadLocalContext::swap_frame_allocator_memory()
 void GlobalContext::init()
 {
     meshes          .init();
+    passes          .init();
     default_programs.init();
     vertex_layouts  .init();
 }

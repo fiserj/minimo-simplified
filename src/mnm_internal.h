@@ -8,7 +8,7 @@
 
 #include <bgfx/bgfx.h>    // bgfx::*
 
-#include <HandmadeMath.h> // HMM_*, hmm_*
+#include <HandmadeMath.h> // hmm_*
 
 namespace mnm
 {
@@ -22,6 +22,8 @@ namespace mnm
 constexpr uint32_t MAX_MATRIX_STACK_DEPTH = 16;
 
 constexpr uint32_t MAX_MESHES             = 4096;
+
+constexpr uint32_t MAX_PASSES             = 48;
 
 
 // -----------------------------------------------------------------------------
@@ -186,6 +188,69 @@ struct MatrixStack
 
 
 // -----------------------------------------------------------------------------
+// PASSES
+// -----------------------------------------------------------------------------
+
+struct Pass
+{
+    enum : uint8_t
+    {
+        DIRTY_NONE        = 0x00,
+        DIRTY_CLEAR       = 0x01,
+        DIRTY_TOUCH       = 0x02,
+        DIRTY_TRANSFORM   = 0x04,
+        DIRTY_RECT        = 0x08,
+        DIRTY_FRAMEBUFFER = 0x10,
+    };
+
+    hmm_mat4                view_matrix;
+    hmm_mat4                proj_matrix;
+
+    uint16_t                viewport_x;
+    uint16_t                viewport_y;
+    uint16_t                viewport_width;
+    uint16_t                viewport_height;
+
+    bgfx::FrameBufferHandle framebuffer;
+
+    uint16_t                clear_flags;
+    float                   clear_depth;
+    uint32_t                clear_rgba;
+    uint8_t                 clear_stencil;
+
+    uint8_t                 dirty_flags;
+
+    void init();
+
+    void update(bgfx::ViewId id, bgfx::Encoder* encoder, bool backbuffer_size_changed);
+
+    void touch();
+
+    void set_view(const hmm_mat4& matrix);
+
+    void set_projection(const hmm_mat4& matrix);
+
+    void set_framebuffer(bgfx::FrameBufferHandle framebuffer);
+
+    void set_no_clear();
+
+    void set_clear_depth(float depth);
+
+    void set_clear_color(uint32_t rgba);
+
+    void set_viewport(uint16_t x, uint16_t y, uint16_t width, uint16_t height);
+};
+
+struct PassCache
+{
+    std::array<Pass, MAX_PASSES> passes;
+    bool                         backbuffer_size_changed;
+
+    void init();
+};
+
+
+// -----------------------------------------------------------------------------
 // THREAD-LOCAL CONTEXT
 // -----------------------------------------------------------------------------
 
@@ -210,6 +275,7 @@ struct ThreadLocalContext
 struct GlobalContext
 {
     MeshCache           meshes;
+    PassCache           passes;
     DefaultProgramCache default_programs;
     VertexLayoutCache   vertex_layouts;
 
