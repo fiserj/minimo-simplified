@@ -119,7 +119,7 @@ union Mesh
 {
     bgfx::TransientVertexBuffer* transient_vertex_buffer;
     bgfx::VertexBufferHandle     static_vertex_buffer;
-    bgfx::VertexBufferHandle     static_index_buffer;
+    bgfx::IndexBufferHandle      static_index_buffer;
     uint16_t                     element_count;
     uint16_t                     annotation;
 

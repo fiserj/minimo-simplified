@@ -352,6 +352,8 @@ void Mesh::create(const MeshDesc& desc, ArenaAllocator& allocator)
         return;
     }
 
+    // TODO : Set custom meshopt allocator (thread-local stack allocator).
+
     const uint32_t index_count = vertex_count;
 
     uint32_t* remap_table = nullptr;
@@ -400,6 +402,29 @@ void Mesh::create(const MeshDesc& desc, ArenaAllocator& allocator)
 
         meshopt_optimizeVertexFetch(vertices->data, indices_u32, index_count, vertices->data, indexed_vertex_count, vertex_size);
     }
+
+    uint16_t* indices_u16 = reinterpret_cast<uint16_t*>(indices->data);
+
+    for (uint32_t i = 0; i < index_count; i++)
+    {
+        indices_u16[i] = uint16_t(indices_u32[i]);
+    }
+
+    const_cast<bgfx::Memory*>(indices)->size /= 2;
+
+    static_vertex_buffer = bgfx::createVertexBuffer(vertices, *desc.layout);
+    REQUIRE(
+        bgfx::isValid(static_vertex_buffer),
+        "Failed to create BGFX vertex buffer."
+    );
+
+    static_index_buffer = bgfx::createIndexBuffer(indices);
+    REQUIRE(
+        bgfx::isValid(static_index_buffer),
+        "Failed to create BGFX index buffer."
+    );
+
+    element_count = index_count;
 }
 
 void Mesh::destroy()
