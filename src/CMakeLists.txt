@@ -2,7 +2,7 @@ set(NAME mnm)
 
 add_library(${NAME} STATIC
     mnm_internal.h
-    mnm.cpp
+    mnm_lib.cpp
 )
 
 target_include_directories(${NAME} PUBLIC
