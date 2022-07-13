@@ -222,7 +222,7 @@ struct Pass
 
     void init();
 
-    void update(bgfx::ViewId id, bgfx::Encoder* encoder, bool backbuffer_size_changed);
+    void update(bgfx::ViewId id, bool backbuffer_size_changed);
 
     void touch();
 
@@ -246,7 +246,11 @@ struct PassCache
     std::array<Pass, MAX_PASSES> passes;
     bool                         backbuffer_size_changed;
 
+    Pass& operator[](bgfx::ViewId id);
+
     void init();
+
+    void update();
 };
 
 

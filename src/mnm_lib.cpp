@@ -659,11 +659,11 @@ void Pass::init()
     dirty_flags     = DIRTY_CLEAR;
 }
 
-void Pass::update(bgfx::ViewId id, bgfx::Encoder* encoder, bool backbuffer_size_changed)
+void Pass::update(bgfx::ViewId id, bool backbuffer_size_changed)
 {
     if (dirty_flags & DIRTY_TOUCH)
     {
-        encoder->touch(id);
+        bgfx::touch(id);
     }
 
     if (dirty_flags & DIRTY_CLEAR)
@@ -762,6 +762,16 @@ void PassCache::init()
     }
 
     backbuffer_size_changed = true;
+}
+
+void PassCache::update()
+{
+    for (bgfx::ViewId id = 0; id < passes.size(); id++)
+    {
+        passes[id].update(id, backbuffer_size_changed);
+    }
+
+    backbuffer_size_changed = false;
 }
 
 
