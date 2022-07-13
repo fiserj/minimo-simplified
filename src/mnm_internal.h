@@ -147,6 +147,22 @@ struct MeshCache
 
 
 // -----------------------------------------------------------------------------
+// DEFAULT PROGRAMS
+// -----------------------------------------------------------------------------
+
+struct DefaultProgramCache
+{
+    std::array<bgfx::ProgramHandle, 8> programs;
+
+    bgfx::ProgramHandle operator[](uint32_t flags) const;
+
+    void init(bgfx::RendererType::Enum renderer = bgfx::RendererType::Count);
+
+    void cleanup();
+};
+
+
+// -----------------------------------------------------------------------------
 // THREAD-LOCAL CONTEXT
 // -----------------------------------------------------------------------------
 
@@ -169,8 +185,9 @@ struct ThreadLocalContext
 
 struct GlobalContext
 {
-    MeshCache         mesh_cache;
-    VertexLayoutCache vertex_layout_cache;
+    MeshCache           meshes;
+    DefaultProgramCache default_programs;
+    VertexLayoutCache   vertex_layouts;
 
     void init();
 

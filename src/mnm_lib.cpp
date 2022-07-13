@@ -1,13 +1,15 @@
 #include "mnm_internal.h"
 
-#include <inttypes.h>      // PRI*
-#include <stddef.h>        // max_align_t, size_t
-#include <string.h>        // memcpy
+#include <inttypes.h>             // PRI*
+#include <stddef.h>               // max_align_t, size_t
+#include <string.h>               // memcpy
 
-#include <bx/allocator.h>  // alignPtr
-#include <bx/bx.h>         // BX_ASSERT, BX_WARN, isPowerOf2
+#include <bgfx/embedded_shader.h> // BGFX_EMBEDDED_SHADER*
 
-#include <meshoptimizer.h> // meshopt_*
+#include <bx/allocator.h>         // alignPtr
+#include <bx/bx.h>                // BX_ASSERT, BX_WARN, isPowerOf2
+
+#include <meshoptimizer.h>        // meshopt_*
 
 #include <mnm.h>
 
@@ -473,6 +475,120 @@ void MeshCache::invalidate_transient_meshes()
 
 
 // -----------------------------------------------------------------------------
+// DEFAULT PROGRAMS
+// -----------------------------------------------------------------------------
+
+struct DefaultProgramDesc
+{
+    uint32_t    attribs;
+    const char* vs_name;
+    const char* fs_name = nullptr;
+};
+
+static const DefaultProgramDesc s_default_programs_descs[] =
+{
+    {
+        0, // NOTE : Position only. It's assumed everywhere else.
+        "position"
+    },
+    {
+        VERTEX_COLOR,
+        "position_color"
+    },
+    {
+        VERTEX_COLOR | VERTEX_NORMAL,
+        "position_color_normal"
+    },
+    {
+        VERTEX_COLOR | VERTEX_TEXCOORD,
+        "position_color_texcoord"
+    },
+    {
+        VERTEX_NORMAL,
+        "position_normal"
+    },
+    {
+        VERTEX_TEXCOORD,
+        "position_texcoord"
+    },
+};
+
+// TODO : Add default embedded shaders.
+
+bgfx::ProgramHandle DefaultProgramCache::operator[](uint32_t flags) const
+{
+    static_assert(
+        (VERTEX_ATTRIB_MASK >> VERTEX_ATTRIB_SHIFT) == 0b00000111,
+        "Invalid assumption about vertex attribute mask bits."
+    );
+
+    const uint32_t index = (flags & VERTEX_ATTRIB_MASK) >> VERTEX_ATTRIB_SHIFT;
+
+    return programs[index];
+}
+
+void DefaultProgramCache::init(bgfx::RendererType::Enum renderer)
+{
+    *this = {};
+
+    if (renderer == bgfx::RendererType::Count)
+    {
+        renderer = bgfx::getRendererType();
+    }
+
+    programs.fill(BGFX_INVALID_HANDLE);
+
+    char vs_name[32];
+    char fs_name[32];
+
+    for (const DefaultProgramDesc& desc : s_default_programs_descs)
+    {
+        strcpy(vs_name, desc.vs_name);
+        strcat(vs_name, "_vs");
+
+        strcpy(fs_name, desc.fs_name ? desc.fs_name : desc.vs_name);
+        strcat(fs_name, "_fs");
+
+        const bgfx::ShaderHandle vertex = {}; // bgfx::createEmbeddedShader(s_default_shaders, renderer, vs_name);
+        REQUIRE(
+            bgfx::isValid(vertex),
+            "Invalid default vertex shader '%s'.",
+            vs_name
+        );
+
+        const bgfx::ShaderHandle fragment = {}; // bgfx::createEmbeddedShader(s_default_shaders, renderer, fs_name);
+        REQUIRE(
+            bgfx::isValid(fragment),
+            "Invalid default fragment shader '%s'.",
+            fs_name
+        );
+
+        const bgfx::ProgramHandle program = bgfx::createProgram(vertex, fragment, true);
+        ASSERT(
+            bgfx::isValid(program),
+            "Invalid default program with shaders '%s' and '%s'.",
+            vs_name, fs_name
+        );
+
+        (*this)[desc.attribs] = program;
+    }
+}
+
+void DefaultProgramCache::cleanup()
+{
+    for (bgfx::ProgramHandle program : programs)
+    {
+        if (bgfx::isValid(program))
+        {
+            bgfx::destroy(program);
+        }
+    }
+
+    *this = {};
+}
+
+
+// -----------------------------------------------------------------------------
 // THREAD-LOCAL CONTEXT
 // -----------------------------------------------------------------------------
 
@@ -507,14 +623,15 @@ void ThreadLocalContext::swap_frame_allocator_memory()
 
 void GlobalContext::init()
 {
-    mesh_cache.init();
-
-    vertex_layout_cache.init();
+    meshes          .init();
+    default_programs.init();
+    vertex_layouts  .init();
 }
 
 void GlobalContext::cleanup()
 {
-    mesh_cache.cleanup();
+    default_programs.cleanup();
+    meshes          .cleanup();
 }
 
 
