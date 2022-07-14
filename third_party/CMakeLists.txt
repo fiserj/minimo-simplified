@@ -1,3 +1,19 @@
+macro(TURN_OFF option)
+    set(${option} OFF CACHE INTERNAL "" FORCE)
+endmacro()
+
+TURN_OFF(ENKITS_BUILD_C_INTERFACE)
+TURN_OFF(ENKITS_BUILD_EXAMPLES)
+TURN_OFF(ENKITS_BUILD_SHARED)
+TURN_OFF(ENKITS_INSTALL)
+
+TURN_OFF(GLFW_BUILD_DOCS)
+TURN_OFF(GLFW_BUILD_EXAMPLES)
+TURN_OFF(GLFW_BUILD_TESTS)
+TURN_OFF(GLFW_DOCUMENT_INTERNALS)
+TURN_OFF(GLFW_INSTALL)
+TURN_OFF(GLFW_VULKAN_STATIC)
+
 include(FetchContent)
 
 FetchContent_Declare(
@@ -19,6 +35,12 @@ FetchContent_Declare(
 )
 
 FetchContent_Declare(
+    glfw
+    GIT_REPOSITORY https://github.com/glfw/glfw.git
+    GIT_TAG        62e175ef9fae75335575964c845a302447c012c7
+)
+
+FetchContent_Declare(
     HandmadeMath
     GIT_REPOSITORY https://github.com/HandmadeMath/Handmade-Math.git
     GIT_TAG        v1.13.0
@@ -28,6 +50,10 @@ FetchContent_Declare(
     meshoptimizer
     GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
     GIT_TAG        v0.17
+)
+
+FetchContent_MakeAvailable(
+    glfw
 )
 
 FetchContent_Populate(bgfx)
