@@ -8,6 +8,8 @@
 
 #include <bgfx/bgfx.h>    // bgfx::*
 
+#include <GLFW/glfw3.h>   // GLFWwindow
+
 #include <HandmadeMath.h> // hmm_*
 
 namespace mnm
@@ -168,6 +170,27 @@ struct DefaultProgramCache
 
 
 // -----------------------------------------------------------------------------
+// DEFAULT UNIFORMS
+// -----------------------------------------------------------------------------
+
+enum struct DefaultUniform : uint32_t
+{
+    COLOR_TEXTURE_RGBA,
+};
+
+struct DefaultUniformCache
+{
+    std::array<bgfx::UniformHandle, 1> uniforms;
+
+    bgfx::UniformHandle operator[](DefaultUniform uniform) const;
+
+    void init();
+
+    void cleanup();
+};
+
+
+// -----------------------------------------------------------------------------
 // MATRIX STACK
 // -----------------------------------------------------------------------------
 
@@ -306,8 +329,11 @@ struct GlobalContext
 {
     MeshCache           meshes;
     PassCache           passes;
-    DefaultProgramCache default_programs;
     VertexLayoutCache   vertex_layouts;
+
+    // These ones require BGFX to be set up.
+    DefaultUniformCache default_uniforms;
+    DefaultProgramCache default_programs;
 
     void init();
 

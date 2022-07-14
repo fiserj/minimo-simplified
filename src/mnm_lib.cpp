@@ -611,6 +611,51 @@ void DefaultProgramCache::cleanup()
 
 
 // -----------------------------------------------------------------------------
+// DEFAULT UNIFORMS
+// -----------------------------------------------------------------------------
+
+struct DefaultUniformDesc
+{
+    const char*             name;
+    bgfx::UniformType::Enum type;
+    DefaultUniform          index;
+};
+
+static const DefaultUniformDesc s_default_uniform_descs[] =
+{
+    { "s_tex_color_rgba", bgfx::UniformType::Sampler, DefaultUniform::COLOR_TEXTURE_RGBA },
+};
+
+bgfx::UniformHandle DefaultUniformCache::operator[](DefaultUniform uniform) const
+{
+    return uniforms[uint32_t(uniform)];
+}
+
+void DefaultUniformCache::init()
+{
+    for (const DefaultUniformDesc& desc : s_default_uniform_descs)
+    {
+        uniforms[uint32_t(desc.index)] = bgfx::createUniform(desc.name, desc.type);
+
+        ASSERT(bgfx::isValid(uniforms[uint32_t(desc.index)]),
+            "Failed to create default uniform '%s'.",
+            desc.name
+        );
+    }
+}
+
+void DefaultUniformCache::cleanup()
+{
+    for (bgfx::UniformHandle uniform : uniforms)
+    {
+        bgfx::destroy(uniform);
+    }
+
+    *this = {};
+}
+
+
+// -----------------------------------------------------------------------------
 // MATRIX STACK
 // -----------------------------------------------------------------------------
 
@@ -848,12 +893,15 @@ void GlobalContext::init()
 {
     meshes          .init();
     passes          .init();
-    default_programs.init();
     vertex_layouts  .init();
+
+    default_uniforms.init();
+    default_programs.init();
 }
 
 void GlobalContext::cleanup()
 {
+    default_uniforms.cleanup();
     default_programs.cleanup();
     meshes          .cleanup();
 }
