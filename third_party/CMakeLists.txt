@@ -41,6 +41,12 @@ FetchContent_Declare(
 )
 
 FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        250333d895b1067533533dcfab137512745b9689
+)
+
+FetchContent_Declare(
     HandmadeMath
     GIT_REPOSITORY https://github.com/HandmadeMath/Handmade-Math.git
     GIT_TAG        v1.13.0
@@ -60,10 +66,12 @@ FetchContent_Populate(bgfx)
 FetchContent_Populate(bimg)
 FetchContent_Populate(bx)
 FetchContent_Populate(HandmadeMath)
+FetchContent_Populate(imgui)
 FetchContent_Populate(meshoptimizer)
 
 include(cmake/bgfx.cmake)
 include(cmake/bimg.cmake)
 include(cmake/bx.cmake)
 include(cmake/HandmadeMath.cmake)
+include(cmake/imgui.cmake)
 include(cmake/meshoptimizer.cmake)

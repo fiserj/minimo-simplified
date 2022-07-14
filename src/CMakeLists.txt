@@ -15,17 +15,18 @@ endif()
 add_library(${NAME} STATIC
     ${SOURCE_FILES}
 )
+
 target_include_directories(${NAME} PUBLIC
     ../include
 )
 
-target_link_libraries(${NAME}
-    PUBLIC
-        bgfx
-        HandmadeMath
-    PRIVATE
-        bx
-        meshoptimizer
+target_link_libraries(${NAME} PRIVATE
+    bgfx
+    bx
+    glfw
+    HandmadeMath
+    imgui
+    meshoptimizer
 )
 
 if(MSVC)
