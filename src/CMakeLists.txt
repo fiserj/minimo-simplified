@@ -1,10 +1,20 @@
 set(NAME mnm)
 
-add_library(${NAME} STATIC
+set(SOURCE_FILES
     mnm_internal.h
+    mnm_api.cpp
     mnm_lib.cpp
 )
 
+if(APPLE)
+    list(APPEND SOURCE_FILES mnm_platform.mm)
+else()
+    list(APPEND SOURCE_FILES mnm_platform.cpp)
+endif()
+
+add_library(${NAME} STATIC
+    ${SOURCE_FILES}
+)
 target_include_directories(${NAME} PUBLIC
     ../include
 )
