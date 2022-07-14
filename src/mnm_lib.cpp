@@ -8,6 +8,7 @@
 
 #include <bx/allocator.h>         // alignPtr
 #include <bx/bx.h>                // BX_ASSERT, BX_WARN, isPowerOf2
+#include <bx/timer.h>             // getHPCounter, getHPFrequency
 
 #include <meshoptimizer.h>        // meshopt_*
 
@@ -772,6 +773,40 @@ void PassCache::update()
     }
 
     backbuffer_size_changed = false;
+}
+
+
+// -----------------------------------------------------------------------------
+// TIME MEASUREMENT
+// -----------------------------------------------------------------------------
+
+static const double s_timer_inv_frequency = 1.0 / double(bx::getHPFrequency());
+
+void Timer::tic()
+{
+    tic(bx::getHPCounter());
+}
+
+void Timer::tic(int64_t now)
+{
+    counter = now;
+}
+
+double Timer::toc(bool restart)
+{
+    return toc(bx::getHPCounter(), restart);
+}
+
+double Timer::toc(int64_t now, bool restart)
+{
+    elapsed = (now - counter) * s_timer_inv_frequency;
+
+    if (restart)
+    {
+        counter = now;
+    }
+
+    return elapsed;
 }
 
 
