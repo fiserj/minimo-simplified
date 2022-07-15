@@ -41,6 +41,7 @@ else()
         -Wall
         -Wextra
         -Wpedantic
+        -Wno-gnu-anonymous-struct
     )
 endif()
 

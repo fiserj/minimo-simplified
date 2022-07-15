@@ -126,11 +126,19 @@ struct MeshDesc
 
 union Mesh
 {
-    bgfx::TransientVertexBuffer* transient_vertex_buffer;
-    bgfx::VertexBufferHandle     static_vertex_buffer;
-    bgfx::IndexBufferHandle      static_index_buffer;
-    uint16_t                     element_count;
-    uint16_t                     annotation;
+    union
+    {
+        bgfx::TransientVertexBuffer* transient_vertex_buffer;
+
+        struct
+        {
+            bgfx::VertexBufferHandle static_vertex_buffer;
+            bgfx::IndexBufferHandle  static_index_buffer;
+        };
+    };
+
+    uint32_t                         flags;
+    uint16_t                         element_count;
 
     MeshType type() const;
 
@@ -219,7 +227,7 @@ struct Texture
 
     void destroy();
 
-    void schedule_read(bgfx::ViewId pass, bgfx::Encoder* encoder, void* output_data);
+    void schedule_read(bgfx::ViewId pass, bgfx::Encoder& encoder, void* output_data);
 };
 
 struct TextureCache
@@ -343,6 +351,29 @@ struct Timer
 
 
 // -----------------------------------------------------------------------------
+// DRAW STATE & SUBMISSION
+// -----------------------------------------------------------------------------
+
+struct DrawState
+{
+    const Mesh*             mesh;
+    const hmm_mat4*         transform;
+    uint32_t                element_start;
+    uint32_t                element_count;
+    uint32_t                flags;
+    bgfx::ViewId            pass;
+    bgfx::FrameBufferHandle framebuffer;
+    bgfx::ProgramHandle     program;
+    bgfx::TextureHandle     texture;
+    bgfx::UniformHandle     sampler;
+
+    void reset();
+
+    void submit(bgfx::Encoder& encoder);
+};
+
+
+// -----------------------------------------------------------------------------
 // PLATFORM-SPECIFIC STUFF
 // -----------------------------------------------------------------------------
 
@@ -357,6 +388,7 @@ struct ThreadLocalContext
 {
     std::vector<uint8_t> double_frame_memory;
     ArenaAllocator       frame_allocator;
+    DrawState            draw_state;
     MatrixStack          matrix_stack;
 
     void init(uint32_t frame_memory);

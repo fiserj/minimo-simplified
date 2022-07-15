@@ -303,9 +303,10 @@ std::span<const uint8_t> VertexRecorder::buffer() const
 // MESH
 // -----------------------------------------------------------------------------
 
-static constexpr uint32_t PRIMITIVE_TYPE_MASK = PRIMITIVE_TRIANGLES |
-                                                PRIMITIVE_QUADS     |
-                                                PRIMITIVE_LINES     ;
+static constexpr uint32_t PRIMITIVE_TYPE_SHIFT = 4;
+static constexpr uint32_t PRIMITIVE_TYPE_MASK  = PRIMITIVE_TRIANGLES |
+                                                 PRIMITIVE_QUADS     |
+                                                 PRIMITIVE_LINES     ;
 
 MeshType Mesh::type() const
 {
@@ -428,7 +429,8 @@ void Mesh::create(const MeshDesc& desc, ArenaAllocator& allocator)
         "Failed to create BGFX index buffer."
     );
 
-    element_count = index_count;
+    flags = desc.flags;
+    element_count = uint16_t(index_count);
 }
 
 void Mesh::destroy()
@@ -821,7 +823,7 @@ void Texture::destroy()
     *this = INVALID_TEXTURE;
 }
 
-void Texture::schedule_read(bgfx::ViewId pass, bgfx::Encoder* encoder, void* output_data)
+void Texture::schedule_read(bgfx::ViewId pass, bgfx::Encoder& encoder, void* output_data)
 {
     REQUIRE(
         bgfx::isValid(handle),
@@ -853,7 +855,7 @@ void Texture::schedule_read(bgfx::ViewId pass, bgfx::Encoder* encoder, void* out
         );
     }
 
-    encoder->blit(pass, blit_handle, 0, 0, handle);
+    encoder.blit(pass, blit_handle, 0, 0, handle);
 
     read_frame = bgfx::readTexture(blit_handle, output_data);
 }
@@ -1091,6 +1093,121 @@ double Timer::toc(int64_t now, bool restart)
 
 
 // -----------------------------------------------------------------------------
+// DRAW STATE & SUBMISSION
+// -----------------------------------------------------------------------------
+
+static constexpr uint32_t BLEND_STATE_SHIFT      = 0;
+static constexpr uint32_t BLEND_STATE_MASK       = STATE_BLEND_ADD   |
+                                                   STATE_BLEND_ALPHA |
+                                                   STATE_BLEND_MAX   |
+                                                   STATE_BLEND_MIN   ;
+
+static constexpr uint32_t CULL_STATE_SHIFT       = 4;
+static constexpr uint32_t CULL_STATE_MASK        = STATE_CULL_CCW |
+                                                   STATE_CULL_CW  ;
+
+static constexpr uint32_t DEPTH_TEST_STATE_SHIFT = 6;
+static constexpr uint32_t DEPTH_TEST_STATE_MASK  = STATE_DEPTH_TEST_GEQUAL  |
+                                                   STATE_DEPTH_TEST_GREATER |
+                                                   STATE_DEPTH_TEST_LEQUAL  |
+                                                   STATE_DEPTH_TEST_LESS    ;
+
+static uint64_t translate_draw_state_flags(uint32_t draw_flags, uint32_t mesh_flags)
+{
+    constexpr uint64_t blend[] =
+    {
+        0,
+        BGFX_STATE_BLEND_ADD,
+        BGFX_STATE_BLEND_ALPHA,
+        BGFX_STATE_BLEND_LIGHTEN,
+        BGFX_STATE_BLEND_DARKEN,
+    };
+
+    constexpr uint64_t cull[] =
+    {
+        0,
+        BGFX_STATE_CULL_CCW,
+        BGFX_STATE_CULL_CW,
+    };
+
+    constexpr uint64_t depth_test[] =
+    {
+        0,
+        BGFX_STATE_DEPTH_TEST_GEQUAL,
+        BGFX_STATE_DEPTH_TEST_GREATER,
+        BGFX_STATE_DEPTH_TEST_LEQUAL,
+        BGFX_STATE_DEPTH_TEST_LESS,
+    };
+
+    constexpr uint64_t primitive[] =
+    {
+        0, // Triangles.
+        0, // Quads (for users, triangles internally).
+        BGFX_STATE_PT_TRISTRIP,
+        BGFX_STATE_PT_LINES,
+        BGFX_STATE_PT_LINESTRIP,
+        BGFX_STATE_PT_POINTS,
+    };
+
+    return
+        primitive [(mesh_flags & PRIMITIVE_TYPE_MASK  ) >> PRIMITIVE_TYPE_SHIFT      ] |
+        blend     [(draw_flags & BLEND_STATE_MASK     ) >> BLEND_STATE_SHIFT         ] |
+        cull      [(draw_flags & CULL_STATE_MASK      ) >> CULL_STATE_SHIFT          ] |
+        depth_test[(draw_flags & DEPTH_TEST_STATE_MASK) >> DEPTH_TEST_STATE_SHIFT    ] |
+
+        // TODO : Change the conditionals to shifts as well.
+        (          (draw_flags & STATE_MSAA           ) ?  BGFX_STATE_MSAA        : 0) |
+        (          (draw_flags & STATE_WRITE_A        ) ?  BGFX_STATE_WRITE_A     : 0) |
+        (          (draw_flags & STATE_WRITE_RGB      ) ?  BGFX_STATE_WRITE_RGB   : 0) |
+        (          (draw_flags & STATE_WRITE_Z        ) ?  BGFX_STATE_WRITE_Z     : 0) ;
+}
+
+void DrawState::reset()
+{
+    mesh          = nullptr;
+    transform     = nullptr;
+    element_start = 0;
+    element_count = UINT32_MAX;
+    flags         = STATE_DEFAULT;
+    pass          = UINT16_MAX;
+    framebuffer   = BGFX_INVALID_HANDLE;
+    program       = BGFX_INVALID_HANDLE;
+    texture       = BGFX_INVALID_HANDLE;
+    sampler       = BGFX_INVALID_HANDLE;
+}
+
+void DrawState::submit(bgfx::Encoder& encoder)
+{
+    if (mesh->type() == MeshType::STATIC)
+    {
+        encoder.setVertexBuffer(0, mesh->static_vertex_buffer);
+        encoder.setIndexBuffer (   mesh->static_index_buffer, element_start, element_count);
+    }
+    else
+    {
+        encoder.setVertexBuffer(0, mesh->transient_vertex_buffer, element_start, element_count);
+    }
+
+    if (bgfx::isValid(texture) && bgfx::isValid(sampler))
+    {
+        encoder.setTexture(0, sampler, texture);
+    }
+
+    encoder.setState(translate_draw_state_flags(flags, mesh->flags));
+
+    encoder.setTransform(transform);
+
+    REQUIRE(
+        bgfx::isValid(program),
+        "Invalid draw state program."
+    );
+    encoder.submit(pass, program);
+
+    reset();
+}
+
+
+// -----------------------------------------------------------------------------
 // THREAD-LOCAL CONTEXT
 // -----------------------------------------------------------------------------
 
@@ -1100,6 +1217,7 @@ void ThreadLocalContext::init(uint32_t frame_memory)
 
     frame_allocator.init({ double_frame_memory.data(), frame_memory });
     matrix_stack   .init();
+    draw_state     .reset();
 }
 
 void ThreadLocalContext::cleanup()
