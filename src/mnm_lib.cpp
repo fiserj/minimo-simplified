@@ -154,7 +154,6 @@ static const bgfx::Memory* allocacte_bgfx_memory(ArenaAllocator& allocator, uint
 static constexpr uint32_t VERTEX_POSITION     = VERTEX_COLOR >> 1;
 
 static constexpr uint32_t VERTEX_ATTRIB_SHIFT = 6;
-
 static constexpr uint32_t VERTEX_ATTRIB_MASK  = VERTEX_COLOR    |
                                                 VERTEX_NORMAL   |
                                                 VERTEX_TEXCOORD ;
@@ -656,6 +655,242 @@ void DefaultUniformCache::cleanup()
 
 
 // -----------------------------------------------------------------------------
+// TEXTURES
+// -----------------------------------------------------------------------------
+
+static constexpr uint32_t TEXTURE_BORDER_SHIFT     = 1;
+static constexpr uint32_t TEXTURE_BORDER_MASK      = TEXTURE_MIRROR |
+                                                     TEXTURE_CLAMP  ;
+
+static constexpr uint32_t TEXTURE_FORMAT_SHIFT     = 3;
+static constexpr uint32_t TEXTURE_FORMAT_MASK      = TEXTURE_R8    |
+                                                     TEXTURE_D24S8 |
+                                                     TEXTURE_D32F  ;
+
+static constexpr uint32_t TEXTURE_SAMPLING_SHIFT   = 0;
+static constexpr uint32_t TEXTURE_SAMPLING_MASK    = TEXTURE_NEAREST;
+
+static constexpr uint32_t TEXTURE_TARGET_SHIFT     = 6;
+static constexpr uint32_t TEXTURE_TARGET_MASK      = TEXTURE_TARGET;
+
+static constexpr Texture  INVALID_TEXTURE          =
+{
+    BGFX_INVALID_HANDLE,
+    0,
+    0,
+    bgfx::TextureFormat::Count,
+    bgfx::BackbufferRatio::Count,
+    BGFX_INVALID_HANDLE,
+    UINT32_MAX,
+};
+
+static uint64_t translate_texture_flags(uint32_t flags)
+{
+    constexpr uint64_t sampling[] =
+    {
+        BGFX_SAMPLER_NONE,
+        BGFX_SAMPLER_POINT,
+    };
+
+    constexpr uint64_t border[] =
+    {
+        BGFX_SAMPLER_NONE,
+        BGFX_SAMPLER_UVW_MIRROR,
+        BGFX_SAMPLER_UVW_CLAMP,
+    };
+
+    constexpr uint64_t target[] =
+    {
+        BGFX_TEXTURE_NONE,
+        BGFX_TEXTURE_RT,
+    };
+
+    return
+        sampling[(flags & TEXTURE_SAMPLING_MASK) >> TEXTURE_SAMPLING_SHIFT] |
+        border  [(flags & TEXTURE_BORDER_MASK  ) >> TEXTURE_BORDER_SHIFT  ] |
+        target  [(flags & TEXTURE_TARGET_MASK  ) >> TEXTURE_TARGET_SHIFT  ] ;
+}
+
+static bgfx::TextureFormat::Enum translate_texture_format(uint32_t flags, uint32_t& out_format_size)
+{
+    struct TextureFormat
+    {
+        uint32_t                  size;
+        bgfx::TextureFormat::Enum type;
+    };
+
+    constexpr TextureFormat formats[] =
+    {
+        { 4, bgfx::TextureFormat::RGBA8 },
+        { 1, bgfx::TextureFormat::R8    },
+        { 0, bgfx::TextureFormat::D24S8 },
+        { 0, bgfx::TextureFormat::D32F  },
+    };
+
+    const TextureFormat format = formats[(flags & TEXTURE_FORMAT_MASK) >> TEXTURE_FORMAT_SHIFT];
+
+    out_format_size = format.size;
+
+    return format.type;
+}
+
+void Texture::create(const TextureDesc& desc, ArenaAllocator& allocator)
+{
+    *this = INVALID_TEXTURE;
+
+    ratio  = bgfx::BackbufferRatio::Count;
+    width  = uint16_t(desc.width);
+    height = uint16_t(desc.height);
+
+    uint32_t format_size = 0;
+    format = translate_texture_format(desc.flags, format_size);
+
+    blit_handle = BGFX_INVALID_HANDLE;
+    read_frame  = UINT32_MAX;
+
+    if (width >= SIZE_EQUAL && width <= SIZE_DOUBLE && width == height)
+    {
+        ratio = bgfx::BackbufferRatio::Enum(desc.width - SIZE_EQUAL);
+    }
+
+    const bgfx::Memory* memory = nullptr;
+
+    if (desc.data && format_size > 0 && ratio == bgfx::BackbufferRatio::Count)
+    {
+        const uint32_t size = width * height * format_size;
+
+        memory = allocacte_bgfx_memory(allocator, size);
+        REQUIRE(
+            memory && memory->data,
+            "Failed to allocate memory for texture copy."
+        );
+
+        if (desc.stride == 0 || desc.stride == width * format_size)
+        {
+            memcpy(memory->data, desc.data, memory->size);
+        }
+        else
+        {
+            const uint8_t* src  = static_cast<const uint8_t*>(desc.data);
+            uint8_t*       dst  = memory->data;
+            const uint32_t size = width * format_size;
+
+            for (uint16_t y = 0; y < height; y++)
+            {
+                memcpy(dst, src, size);
+
+                src += desc.stride;
+                dst += size;
+            }
+        }
+    }
+
+    const uint64_t texture_flags = translate_texture_flags(desc.flags);
+
+    if (ratio == bgfx::BackbufferRatio::Count)
+    {
+        handle = bgfx::createTexture2D(width, height, false, 1, format, texture_flags, memory);
+    }
+    else
+    {
+        WARN(
+            !memory,
+            "Texture content ignored."
+        );
+
+        handle = bgfx::createTexture2D(ratio, false, 1, format, texture_flags);
+    }
+    REQUIRE(
+        bgfx::isValid(handle),
+        "Failed to create BGFX texture."
+    );
+}
+
+void Texture::destroy()
+{
+    if (bgfx::isValid(handle))
+    {
+        bgfx::destroy(handle);
+    }
+
+    if (bgfx::isValid(blit_handle))
+    {
+        bgfx::destroy(blit_handle);
+    }
+
+    *this = INVALID_TEXTURE;
+}
+
+void Texture::schedule_read(bgfx::ViewId pass, bgfx::Encoder* encoder, void* output_data)
+{
+    REQUIRE(
+        bgfx::isValid(handle),
+        "Invalid texture."
+    );
+
+    if (!bgfx::isValid(blit_handle))
+    {
+        constexpr uint64_t flags =
+            BGFX_TEXTURE_BLIT_DST  |
+            BGFX_TEXTURE_READ_BACK |
+            BGFX_SAMPLER_MIN_POINT |
+            BGFX_SAMPLER_MAG_POINT |
+            BGFX_SAMPLER_MIP_POINT |
+            BGFX_SAMPLER_U_CLAMP   |
+            BGFX_SAMPLER_V_CLAMP   ;
+
+        if (ratio == bgfx::BackbufferRatio::Count)
+        {
+            blit_handle = bgfx::createTexture2D(width, height, false, 1, format, flags);
+        }
+        else
+        {
+            blit_handle = bgfx::createTexture2D(ratio, false, 1, format, flags);
+        }
+        REQUIRE(
+            bgfx::isValid(blit_handle),
+            "Failed to create BGFX blit texture."
+        );
+    }
+
+    encoder->blit(pass, blit_handle, 0, 0, handle);
+
+    read_frame = bgfx::readTexture(blit_handle, output_data);
+}
+
+Texture& TextureCache::operator[](uint32_t id)
+{
+    return textures[id];
+}
+
+void TextureCache::init()
+{
+    *this = {};
+
+    textures.fill(INVALID_TEXTURE);
+}
+
+void TextureCache::cleanup()
+{
+    for (Texture& texture : textures)
+    {
+        texture.destroy();
+    }
+
+    *this = {};
+}
+
+void TextureCache::add_texture(uint32_t id, const Texture& texture)
+{
+    // NOTE : Not thread safe because users shouldn't create textures with the
+    //        same ID from multiple threads in the first place.
+
+    textures[id].destroy();
+    textures[id] = texture;
+}
+
+
+// -----------------------------------------------------------------------------
 // MATRIX STACK
 // -----------------------------------------------------------------------------
 
@@ -897,12 +1132,15 @@ void GlobalContext::init()
 
     default_uniforms.init();
     default_programs.init();
+    textures        .init();
 }
 
 void GlobalContext::cleanup()
 {
+    textures        .cleanup();
     default_uniforms.cleanup();
     default_programs.cleanup();
+
     meshes          .cleanup();
 }
 

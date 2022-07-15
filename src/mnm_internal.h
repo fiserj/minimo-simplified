@@ -23,9 +23,11 @@ namespace mnm
 
 constexpr uint32_t MAX_MATRIX_STACK_DEPTH = 16;
 
-constexpr uint32_t MAX_MESHES             = 4096;
+constexpr uint32_t MAX_MESHES             = 2048;
 
 constexpr uint32_t MAX_PASSES             = 48;
+
+constexpr uint32_t MAX_TEXTURES           = 512;
 
 
 // -----------------------------------------------------------------------------
@@ -191,6 +193,50 @@ struct DefaultUniformCache
 
 
 // -----------------------------------------------------------------------------
+// TEXTURES
+// -----------------------------------------------------------------------------
+
+struct TextureDesc
+{
+    uint32_t    flags;
+    uint32_t    width;
+    uint32_t    height;
+    uint32_t    stride;
+    const void* data;
+};
+
+struct Texture
+{
+    bgfx::TextureHandle         handle;
+    uint16_t                    width;
+    uint16_t                    height;
+    bgfx::TextureFormat::Enum   format;
+    bgfx::BackbufferRatio::Enum ratio;
+    bgfx::TextureHandle         blit_handle;
+    uint32_t                    read_frame;
+
+    void create(const TextureDesc& desc, ArenaAllocator& allocator);
+
+    void destroy();
+
+    void schedule_read(bgfx::ViewId pass, bgfx::Encoder* encoder, void* output_data);
+};
+
+struct TextureCache
+{
+    std::array<Texture, MAX_TEXTURES> textures;
+
+    Texture& operator[](uint32_t id);
+
+    void init();
+
+    void cleanup();
+
+    void add_texture(uint32_t id, const Texture& texture);
+};
+
+
+// -----------------------------------------------------------------------------
 // MATRIX STACK
 // -----------------------------------------------------------------------------
 
@@ -334,6 +380,7 @@ struct GlobalContext
     // These ones require BGFX to be set up.
     DefaultUniformCache default_uniforms;
     DefaultProgramCache default_programs;
+    TextureCache        textures;
 
     void init();
 
